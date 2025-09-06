@@ -63,3 +63,11 @@ class ToDoListSerializer(serializers.ModelSerializer):
         if bajarilgan and not instance.done_time:
             instance.done_time = now()
         return super().update(instance, validated_data)
+
+class SendCodeSerializer(serializers.Serializer):
+    phone = serializers.CharField(max_length=15)
+
+
+class VerifyCodeSerializer(serializers.Serializer):
+    phone = serializers.CharField(max_length=15)
+    code = serializers.CharField(max_length=6)

@@ -3,9 +3,11 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from drf_yasg.utils import swagger_auto_schema
 from django.shortcuts import get_object_or_404
+from rest_framework import status
 
-from .models import User, ToDoList
-from .serializers import LoginSerializer, UserSerializer, ToDoListSerializer
+from .models import *
+
+from .serializers import *
 from .make_token import get_tokens_for_user
 
 
@@ -47,3 +49,40 @@ class ToDoDetailView(generics.RetrieveUpdateDestroyAPIView):
         if user.is_admin:
             return ToDoList.objects.all()
         return ToDoList.objects.filter(user=user, bajarilgan=False)
+
+
+class SendCodeView(APIView):
+    def post(self, request):
+        serializer = SendCodeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        phone = serializer.validated_data["phone"]
+
+        code = PhoneVerfication.generate_code()
+        PhoneVerfication.objects.create(phone=phone, code=code)
+
+        # TODO: SMS yuborish (hozircha print)
+        print(f"{phone} ga yuborilgan kod: {code}")
+
+        return Response({"success": True, "detail": "Kod yuborildi."}, status=status.HTTP_200_OK)
+
+
+class VerifyCodeView(APIView):
+    def post(self, request):
+        serializer = VerifyCodeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        phone = serializer.validated_data["phone"]
+        code = serializer.validated_data["code"]
+
+        try:
+            record = PhoneVerfication.objects.filter(phone=phone, code=code).latest("created_at")
+        except PhoneVerfication.DoesNotExist:
+            return Response({"success": False, "detail": "Kod noto‘g‘ri."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if record.is_expired():
+            return Response({"success": False, "detail": "Kod muddati tugagan."}, status=status.HTTP_400_BAD_REQUEST)
+
+
+        user, created = User.objects.get_or_create(phone=phone, defaults={"username": phone})
+        token = get_tokens_for_user(user)
+
+        return Response({"success": True, "token": token}, status=status.HTTP_200_OK)
